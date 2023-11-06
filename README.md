@@ -1,0 +1,2 @@
+# Projektmodul_Energiesystemische_Forschung
+Modellierung Ladestandort für batterieelektrische Schwerlast-LKWs
