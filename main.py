@@ -1,73 +1,91 @@
-import random
-import pyomo.environ as pyo
+import pandas as pd
+import numpy as np
 
-# Definiere das Pyomo-Modell
-model = pyo.ConcreteModel()
+timesteps = 12
+timedelta = 10
+anzahl_ladesäulen = 3
 
-# Definiere die Anzahl der Anlagen und Aufgaben
-num_anlagen = 3
-num_aufgaben = 10
+data = { 'Ankunftszeit': [0, 0, 0, 0, 20, 30],
+        'Kapazität': [600, 800, 800, 800, 600, 600],
+        'Akkustand' : [10, 12, 30, 22, 24, 14]}
 
-# Definiere die Menge der Anlagen und Aufgaben
-model.Anlagen = pyo.RangeSet(0, num_anlagen - 1)
-model.Aufgaben = pyo.RangeSet(0, num_aufgaben - 1)
+lkws = pd.DataFrame(data)
 
-# Binäre Variablen, ob eine Aufgabe auf einer Anlage ausgeführt wird
-model.x = pyo.Var(model.Aufgaben, model.Anlagen, within=pyo.Binary)
-model.z = pyo.Var(within=pyo.NonNegativeReals)
 
-# Zielfunktion, um die Zeit in der dritten Anlage zu minimieren
-def objective_rule(model):
-    return model.z
+def create_timestep_array(timedelta, timesteps):
+    return [0+ i * timedelta for i in range(timesteps)]
 
-model.objective = pyo.Objective(rule=objective_rule, sense=pyo.minimize)
+def sortiere_lkws_nach_timstep(lkws):
+    data = {f'Ankommende LKWs': [[]] * timesteps}
+    df = pd.DataFrame(data)
+    neuer_index = range(0, len(df) * timedelta, timedelta)
+    df.set_index(pd.Index(neuer_index), inplace=True)
 
-# Bearbeitungszeiten dynamisch festlegen
-bearbeitungszeiten = {}
+    for index, row in lkws.iterrows():
+        lkwelement=[0, 0]
+        lkwelement[0] = row['Akkustand']
+        lkwelement[1] = row['Kapazität']
 
-for i in model.Aufgaben:
-    for j in model.Anlagen:
-        if j == 2:
-            # Auf Anlage 3 abhängig von der Verfügbarkeit von Anlage 1 oder 2
-            anlage1_oder_2_frei = random.choice([True, False])
-            if anlage1_oder_2_frei:
-                bearbeitungszeiten[i, j] = random.uniform(40, 60)
-            else:
-                bearbeitungszeiten[i, j] = random.uniform(40, 60)
+        testelement = df.at[row['Ankunftszeit'], 'Ankommende LKWs']
+        testzeit = lkws.at[index, 'Ankunftszeit']
+        if df.at[lkws.at[index, 'Ankunftszeit'], 'Ankommende LKWs']==[]:
+            df.at[lkws.at[index, 'Ankunftszeit'], 'Ankommende LKWs'] = [lkwelement]
         else:
-            bearbeitungszeiten[i, j] = random.uniform(40, 60)
+            df.at[lkws.at[index, 'Ankunftszeit'], 'Ankommende LKWs'] += [lkwelement]
+    return df
 
-# Einschränkungen
-def assignment_rule(model, i):
-    return sum(model.x[i, j] for j in model.Anlagen) == 1
+def erstelle_Ladekurve():
+    num_rows = 101
+    cell_value = 600
+    df = pd.DataFrame({'Ladeleistung': [cell_value] * num_rows})
+    return df
 
-model.assignment_constraint = pyo.Constraint(model.Aufgaben, rule=assignment_rule)
+def create_dataframe_with_dimensions(num_rows, num_columns):
+    data = {f'Ladesäule {i}': [[]] * num_rows for i in range(1, num_columns + 1)}
+    df = pd.DataFrame(data)
+    neuer_index = range(0, len(df)*timedelta, timedelta)
+    df.set_index(pd.Index(neuer_index), inplace=True)
+    return df
 
-def machine3_time_rule(model):
-    return model.z >= sum(model.x[i, 2] * bearbeitungszeiten[i, 2] for i in model.Aufgaben if bearbeitungszeiten[i, 2] is not None)
-
-model.machine3_time_constraint = pyo.Constraint(rule=machine3_time_rule)
-
-# Solver-Konfiguration (z.B. GLPK)
-solver = pyo.SolverFactory('glpk')
-solver.solve(model)
-
-# Ergebnisse anzeigen
-if solver.status == pyo.SolverStatus.ok and solver.termination_condition == pyo.TerminationCondition.optimal:
-    print("Optimale Lösung gefunden:")
-    for i in model.Aufgaben:
-        for j in model.Anlagen:
-            if model.x[i, j].value == 1:
-                if j == 2:
-                    if bearbeitungszeiten[i, j] is not None:
-                        print(f"Aufgabe {i + 1} auf Anlage {j + 1}, Bearbeitungszeit: {bearbeitungszeiten[i, j]:.2f} Minuten")
-                    else:
-                        print(f"Aufgabe {i + 1} auf Anlage {j + 1}, Bearbeitungszeit: Warten bis Anlage 1 oder 2 frei ist")
-                else:
-                    print(f"Aufgabe {i + 1} auf Anlage {j + 1}, Bearbeitungszeit: {bearbeitungszeiten[i, j]:.2f} Minuten")
-    print(f"Zeit in der dritten Anlage: {model.z.value:.2f} Minuten")
-else:
-    print("Keine optimale Lösung gefunden.")
+def getladeleistung(ladestand,ladekurve):
+    return ladekurve.at[ladestand,'Ladeleistung']
 
 
+def laden(df_ladesäulen_t,lkws_in_timestep,timestep):
+    df_t1 = df_ladesäulen_t
+    summe_ladender_lkws = 0
+    test= len(lkws_in_timestep)
+    if len(lkws_in_timestep)==0:
+        dummy=0
+        return df_ladesäulen_t
+    else:
+        for lkw in lkws_in_timestep:
+            for ladesäule, wert in df_t1.loc[t].items():
+                dummy=0
+                if len(wert) == 0 and (summe_ladender_lkws < anzahl_ladesäulen):
+                    df_t1.at[timestep, ladesäule] = [lkw]
+                    summe_ladender_lkws+=1
+                    break
+                elif len(wert) == 1 and (summe_ladender_lkws >= anzahl_ladesäulen):
+                    df_t1.at[timestep, ladesäule] += [lkw]
+                    summe_ladender_lkws+=1
+                    break
+                continue
 
+    return df_t1
+
+#def lademanegement(anzahl_ladender_lkw):
+ #   return dummy=0
+
+if __name__ == '__main__':
+    df = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen)
+
+    #df.at[0,'Ladesäule 1'] = [[0.23, 500], [0.33, 600]]
+    sortierte_lkw_liste = sortiere_lkws_nach_timstep(lkws=lkws)
+
+    timestepsarray=create_timestep_array(timesteps=timesteps,timedelta=timedelta)
+    for t in timestepsarray:
+        lkws_in_timestep = sortierte_lkw_liste.at[t, 'Ankommende LKWs']
+        df = laden(df_ladesäulen_t=df,lkws_in_timestep=lkws_in_timestep,timestep=t)
+        dumnmy=0
+    print (df)
