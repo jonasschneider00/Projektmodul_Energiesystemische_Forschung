@@ -1,18 +1,30 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import openpyxl
 
 
-timesteps = 20
+timesteps = 288
 timedelta = 5 #in min
-anzahl_ladesäulen = 3
+anzahl_ladesäulen = 10
 max_akkustand = 80 #heißt 80 %
 
-data = {'Ankunftszeit': [0, 0, 0, 0, 5, 10, 50],
-        'Kapazität': [100, 200, 300, 400, 500, 600, 700],
-        'Akkustand': [9, 16, 30, 22, 51, 14, 21]}
-lkws = pd.DataFrame(data)
+#data = {'Ankunftszeit': [0, 10, 0, 0, 5, 10, 50],
+#        'Kapazität': [100, 200, 300, 400, 500, 600, 700],
+#        'Akkustand': [9, 16, 30, 22, 51, 14, 21]}
+#lkws = pd.DataFrame(data)
 
+
+def read_LKW_data():
+    working_directory = os.getcwd()
+    file_path = os.path.join(working_directory, 'INPUT_LKW.xlsx')
+    try:
+        df = pd.read_excel(file_path)
+        return df
+    except Exception as e:
+        print(f"Fehler beim Lesen der Datei: {e}")
+        return None
 
 def create_timestep_array(timedelta, timesteps):
     return [i * timedelta for i in range(timesteps)]
@@ -123,7 +135,7 @@ def gesamte_ladeleistung(df_ladeleistung):
     return df_gesamtleistung
 
 if __name__ == '__main__':
-    test_ladekurve = erstelle_Ladekurve()
+    lkws = read_LKW_data()
     df_lkws = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen)
     df_ladeleistung = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen)
     sortierte_lkw_liste = sortiere_lkws_nach_timstep(lkws=lkws)
