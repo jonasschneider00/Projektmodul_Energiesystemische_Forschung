@@ -2,19 +2,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-import openpyxl
 
+# config
+###########
+n_tage = 1 # number of simulated days
+timedelta = 5 # time resolution in min
+anzahl_ladesäulen = 10 # number of charging spots
+max_akkustand = 80 # relative capacity when leaving the charging station
+###########
 
-timesteps = 288
-timedelta = 5 #in min
-anzahl_ladesäulen = 10
-max_akkustand = 80 #heißt 80 %
-
-#data = {'Ankunftszeit': [0, 10, 0, 0, 5, 10, 50],
-#        'Kapazität': [100, 200, 300, 400, 500, 600, 700],
-#        'Akkustand': [9, 16, 30, 22, 51, 14, 21]}
-#lkws = pd.DataFrame(data)
-
+timesteps = int(n_tage * 1440/timedelta)
 
 def read_LKW_data():
     working_directory = os.getcwd()
@@ -146,8 +143,8 @@ if __name__ == '__main__':
     gesamte_ladeleistung = gesamte_ladeleistung(df_ladeleistung=df_ladeleistung)
 
     plt.plot(gesamte_ladeleistung.index, gesamte_ladeleistung['Gesamtleistung'], marker='o', linestyle='-')
-    plt.xlabel('Timestep')
-    plt.ylabel('Gesamtleistung')
+    plt.xlabel('Zeit [min]')
+    plt.ylabel('Gesamtleistung [kW]')
     plt.title('Lastgang')
     plt.show()
 
