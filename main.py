@@ -7,11 +7,18 @@ import os
 ###########
 n_tage = 1 # number of simulated days
 timedelta = 5 # time resolution in min
-anzahl_ladesäulen = 10 # number of charging spots
+anzahl_ncs = 5
+anzahl_hpc = 3
 max_akkustand = 80 # relative capacity when leaving the charging station
+leistung_ncs = 150
+leistung_hpc = 350
+netzanschlussleistung = (anzahl_ncs*leistung_ncs+ anzahl_hpc * leistung_hpc) * 0.8
 ###########
 
-timesteps = int(n_tage * 1440/timedelta)
+
+anzahl_ladesäulen = anzahl_ncs + anzahl_hpc # number of charging spots
+# timesteps = int(n_tage * 1440/timedelta)
+timesteps = 100
 
 def read_LKW_data():
     working_directory = os.getcwd()
@@ -34,7 +41,7 @@ def sortiere_lkws_nach_timstep(lkws):
     df.set_index(pd.Index(neuer_index), inplace=True)
 
     for index, row in lkws.iterrows():
-        lkwelement = [row['Akkustand'], row['Kapazität']]
+        lkwelement = [row['Akkustand'], row['Kapazität'], row['Ladesäule']]
         if not df.at[lkws.at[index, 'Ankunftszeit'], 'Ankommende LKWs']:
             df.at[lkws.at[index, 'Ankunftszeit'], 'Ankommende LKWs'] = [lkwelement]
         else:
@@ -46,25 +53,50 @@ def erstelle_Ladekurve():
     #num_rows = 101
     #cell_value = 600
     #df = pd.DataFrame({'Ladeleistung': [cell_value] * num_rows})
-    daten = []
-    for i in range(0, 100, 10):
-        for j in range(i, i + 10):
-            if j <= 100:
-                daten.append((j, 600 - (i // 10) * 10))
-    df = pd.DataFrame(daten, columns=['Index', 'Ladeleistung'])
+    # daten = []
+    # for i in range(0, 100, 10):
+    #     for j in range(i, i + 10):
+    #         if j <= 100:
+    #             daten.append((j, 600 - (i // 10) * 10))
+    # df = pd.DataFrame(daten, columns=['Index', 'Ladeleistung'])
+    # Erstelle eine Liste mit den gewünschten Werten entsprechend den angegebenen Intervallen
+    values = [1.0] * 40 + [0.95] * 10 + [0.9] * 10 + [0.85] * 10 + [0.8] * 10 + [0.6] * 10 + [0.4] * 5 + [0.2] * 6
+
+    # Erstelle das DataFrame
+    df = pd.DataFrame({'rel. Ladeleistung': values})
+
+    # Setze die Indizes von 0 bis 100
+    df.index = range(101)
+
     return df
 
 
-def create_dataframe_with_dimensions(num_rows, num_columns):
+def create_dataframe_with_dimensions(num_rows, num_columns, anzahl_ncs, anzahl_hpc):
     data = {f'Ladesäule {i}': [[]] * num_rows for i in range(1, num_columns + 1)}
     df = pd.DataFrame(data)
+    num_ncs_columns = anzahl_ncs  # Anpassen Sie die gewünschte Anzahl der Spalten für 'NCS'
+    num_hpc_columns = anzahl_hpc  # Anpassen Sie die gewünschte Anzahl der Spalten für 'HPC'
+
+    # Ersetzen der Spaltennamen für NCS
+    for i in range(1, num_ncs_columns + 1):
+        df = df.rename(columns={f'Ladesäule {i}': f'Ladesäule {i} NCS'})
+
+    # Ersetzen der Spaltennamen für HPC
+    for i in range(1, num_hpc_columns + 1):
+        df = df.rename(columns={f'Ladesäule {i + num_ncs_columns}': f'Ladesäule {i + num_ncs_columns} HPC'})
+
     neuer_index = range(0, len(df) * timedelta, timedelta)
     df.set_index(pd.Index(neuer_index), inplace=True)
     return df
 
 
-def getladeleistung(ladestand, ladekurve):
-    return ladekurve.at[ladestand, 'Ladeleistung']
+def getladeleistung(ladestand, ladekurve, ladesäule):
+    if 'NCS' in ladesäule:
+        return ladekurve.at[ladestand, 'rel. Ladeleistung'] * leistung_ncs
+    elif 'HPC' in ladesäule:
+        return ladekurve.at[ladestand, 'rel. Ladeleistung'] * leistung_hpc
+    else:
+        print('Fehler bei Leistungsdefinition der Ladesäulen')
 
 
 def laden(df_ladesäulen_t, lkws_in_timestep, timestep, df_ladeleistung):
@@ -72,12 +104,24 @@ def laden(df_ladesäulen_t, lkws_in_timestep, timestep, df_ladeleistung):
     df_t1_leistung = df_ladeleistung.copy()
     summe_ladender_lkws = 0
     if timestep > 0:
+        vergleichsleistung = 0
         for l, ladesäule in enumerate(df_t1.columns):
             lkws_t_minus_1 = df_t1.at[timestep - timedelta, ladesäule]
-            ladeleistungen = lademanegement(lkws_t_minus_1=lkws_t_minus_1)
+            for i, lkw in enumerate(lkws_t_minus_1):
+                vergleichsleistung += getladeleistung(ladestand=round(lkw[0]), ladekurve=erstelle_Ladekurve(), ladesäule=ladesäule)
+        ladefaktor = 0
+        if vergleichsleistung <= netzanschlussleistung:
+            ladefaktor = 1
+        else:
+            ladefaktor = netzanschlussleistung / vergleichsleistung
+        # laden der LKWs aus t-1
+        for l, ladesäule in enumerate(df_t1.columns):
+            lkws_t_minus_1 = df_t1.at[timestep - timedelta, ladesäule]
+            ladeleistungen = []
             lkws_t_0 = []
             for i, lkw in enumerate(lkws_t_minus_1):
                 lkw_copy = lkw[:]
+                ladeleistungen.append(getladeleistung(ladestand=round(lkw[0]), ladekurve=erstelle_Ladekurve(), ladesäule=ladesäule) * ladefaktor)
                 if lkw_copy[0] < max_akkustand:
                     lkw_t_0 = lade_lkw(lkw=lkw_copy, ladeleistung=ladeleistungen[i])
                     if lkw_t_0[0][0] < max_akkustand:
@@ -92,11 +136,11 @@ def laden(df_ladesäulen_t, lkws_in_timestep, timestep, df_ladeleistung):
     else:
         for lkw in lkws_in_timestep:
             for ladesäule, wert in df_t1.loc[t].items():
-                if len(wert) == 0 and (summe_ladender_lkws < anzahl_ladesäulen):
+                if len(wert) == 0 and (summe_ladender_lkws < anzahl_ladesäulen) and lkw[2] in ladesäule:
                     df_t1.at[timestep, ladesäule] = [lkw]
                     summe_ladender_lkws += 1
                     break
-                elif len(wert) == 1 and (summe_ladender_lkws >= anzahl_ladesäulen):
+                elif len(wert) == 1 and (summe_ladender_lkws >= anzahl_ladesäulen) and lkw[2] in ladesäule:
                     df_t1.at[timestep, ladesäule] += [lkw]
                     summe_ladender_lkws += 1
                     break
@@ -109,20 +153,9 @@ def lade_lkw(lkw, ladeleistung):
     lkw_t1[0] += round(((ladeleistung*timedelta/60)/lkw_t1[1])*100, 2)
     return [lkw_t1]
 
-
-def lademanegement(lkws_t_minus_1):
-    ladeleistungen = []
-    if len(lkws_t_minus_1) == 1:
-        ladeleistungen.append(getladeleistung(ladestand=round(lkws_t_minus_1[0][0]), ladekurve=erstelle_Ladekurve()))
-    elif len(lkws_t_minus_1) == 2:
-        for lkw in lkws_t_minus_1:
-            ladeleistung = 0.5 * getladeleistung(ladestand=round(lkw[0]), ladekurve=erstelle_Ladekurve())
-            ladeleistungen.append(ladeleistung)
-    return ladeleistungen
-
 def gesamte_ladeleistung(df_ladeleistung):
-    df_gesamtleistung = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=1)
-    df_gesamtleistung.rename(columns={'Ladesäule 1': 'Gesamtleistung'}, inplace=True)
+    df_gesamtleistung = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=1, anzahl_ncs=1, anzahl_hpc=0)
+    df_gesamtleistung.rename(columns={'Ladesäule 1 NCS': 'Gesamtleistung'}, inplace=True)
     for index, row in df_ladeleistung.iterrows():
         summe = 0
         for column, leistungen in row.items():
@@ -133,8 +166,9 @@ def gesamte_ladeleistung(df_ladeleistung):
 
 if __name__ == '__main__':
     lkws = read_LKW_data()
-    df_lkws = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen)
-    df_ladeleistung = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen)
+    ladekurve = erstelle_Ladekurve()
+    df_lkws = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen, anzahl_hpc=anzahl_hpc, anzahl_ncs=anzahl_ncs)
+    df_ladeleistung = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen, anzahl_hpc=anzahl_hpc, anzahl_ncs=anzahl_ncs)
     sortierte_lkw_liste = sortiere_lkws_nach_timstep(lkws=lkws)
     timestepsarray = create_timestep_array(timesteps=timesteps, timedelta=timedelta)
     for t in timestepsarray:

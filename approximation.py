@@ -17,14 +17,14 @@ def read_lkw_data(csv_dateipfad=csv_dateipfad):
     df = pd.read_csv(csv_dateipfad, delimiter=';')
 
     # Nur die gewünschten Spalten behalten
-    gewuenschte_spalten = ['Datum', 'Stunde', 'LoA_R1', 'Lzg_R1', 'LoA_R2', 'Lzg_R2']
+    gewuenschte_spalten = ['Datum', 'Stunde', 'LoA_R1', 'Lzg_R1', 'LoA_R2', 'Lzg_R2', 'Sat_R1', 'Sat_R2']
     df = df[gewuenschte_spalten]
 
     # Spalten 'LoA_R1' und 'Lzg_R1' addieren und Ergebnisse in einer neuen Spalte 'gesamt_LKW_R1' speichern
-    df['gesamt_LKW_R1'] = df['LoA_R1'] + df['Lzg_R1']
+    df['gesamt_LKW_R1'] = df['LoA_R1'] + df['Lzg_R1'] + df['Sat_R1']
 
     # Spalten 'LoA_R2' und 'Lzg_R2' addieren und Ergebnisse in einer neuen Spalte 'gesamt_LKW_R2' speichern
-    df['gesamt_LKW_R2'] = df['LoA_R2'] + df['Lzg_R2']
+    df['gesamt_LKW_R2'] = df['LoA_R2'] + df['Lzg_R2'] + df['Sat_R2']
 
     x_values = np.arange(8760)
     y_values = df['gesamt_LKW_R1'].to_numpy()
@@ -36,9 +36,9 @@ def read_lkw_data(csv_dateipfad=csv_dateipfad):
     x_continuous = np.linspace(0, 8759, 105120)  # Mehr Punkte für eine glattere Kurve
     y_continuous = spline(x_continuous)
 
-    # # 1. Summe aller y_values
-    # sum_y_values = np.sum(y_values)
-    # print(f"Summe aller y_values: {sum_y_values}")
+    # 1. Summe aller y_values
+    sum_y_values = np.sum(y_values)
+    print(f"Summe aller y_values: {sum_y_values}")
 
     lkws_in_timestep = []
     summe_in_timestep = []
@@ -51,15 +51,16 @@ def read_lkw_data(csv_dateipfad=csv_dateipfad):
         summe_lkws += wert
         summe = summe - wert
         summe_in_timestep.append(summe)
-    # print(f"Summe aller LKWs: {summe_lkws}")
-    # # Plot der Original-Stufenfunktion und der approximierten stetigen Funktion
-    # plt.step(x_values, y_values, where='mid', label='Stufenfunktion')
-    # plt.plot(x_continuous, y_continuous, label='Approximierte Funktion')
-    # plt.legend()
-    # plt.show()
+    print(f"Summe aller LKWs: {summe_lkws}")
+    # Plot der Original-Stufenfunktion und der approximierten stetigen Funktion
+    plt.step(x_values, y_values, where='mid', label='Stufenfunktion')
+    plt.plot(x_continuous, y_continuous, label='Approximierte Funktion')
+    plt.legend()
+    plt.show()
     return lkws_in_timestep
 
-print(read_lkw_data())
+df = read_lkw_data()
+dummy = 0
 
 
 
