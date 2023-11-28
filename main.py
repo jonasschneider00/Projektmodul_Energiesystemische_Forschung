@@ -6,8 +6,8 @@ import os
 # config
 ############
 timedelta = 5  # time resolution in min
-anzahl_ncs = 1
-anzahl_hpc = 1
+anzahl_ncs = 2
+anzahl_hpc = 3
 max_akkustand = 80  # relative capacity when leaving the charging station
 leistung_ncs = 150
 leistung_hpc = 350
