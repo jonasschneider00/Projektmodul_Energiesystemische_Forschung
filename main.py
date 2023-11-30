@@ -2,23 +2,27 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from approximation import *
 
 # config
 ############
 timedelta = 5  # time resolution in min
 anzahl_ncs = 2
-anzahl_hpc = 3
+anzahl_hpc = 5
 max_akkustand = 80  # relative capacity when leaving the charging station
 leistung_ncs = 150
 leistung_hpc = 350
 netzanschlussleistung = (anzahl_ncs * leistung_ncs + anzahl_hpc * leistung_hpc) * 0.8
 nachtzeit_ncs = 480
 pausenzeit = 60
+Beispieldaten = False
+plot = 'nicht_ladende_LKWs' #nicht_ladende_LKWs, Lastgang
 ###########
 
 
-anzahl_ladesäulen = anzahl_ncs + anzahl_hpc  # number of charging spots
-timesteps = 100
+anzahl_ladesäulen = anzahl_ncs + anzahl_hpc # number of charging spots
+if Beispieldaten:
+    timesteps = 100
 
 
 def read_LKW_data():
@@ -101,7 +105,8 @@ def getladeleistung(ladestand, ladekurve, ladesäule):
         print('Fehler bei Leistungsdefinition der Ladesäulen')
 
 
-def laden(df_ladesäulen_t, lkws_in_timestep, timestep, df_ladeleistung, lkws_geladen_gesamt, lkws_nicht_geladen_gesamt):
+def laden(df_ladesäulen_t, lkws_in_timestep, timestep, df_ladeleistung, lkws_geladen_gesamt):
+    lkws_nicht_geladen_gesamt = 0
     df_t1 = df_ladesäulen_t.copy()
     df_t1_leistung = df_ladeleistung.copy()
     summe_ladender_lkws_dict = {'NCS' : 0, 'HPC': 0}
@@ -192,32 +197,88 @@ def gesamte_ladeleistung(df_ladeleistung):
 
 
 if __name__ == '__main__':
-    lkws = read_LKW_data()
-    ladekurve = erstelle_Ladekurve()
-    df_lkws = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen, anzahl_hpc=anzahl_hpc,
-                                               anzahl_ncs=anzahl_ncs)
-    df_ladeleistung = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen,
-                                                       anzahl_hpc=anzahl_hpc, anzahl_ncs=anzahl_ncs)
-    sortierte_lkw_liste = sortiere_lkws_nach_timstep(lkws=lkws)
-    timestepsarray = create_timestep_array(timesteps=timesteps, timedelta=timedelta)
+    if Beispieldaten:
+        lkws = read_LKW_data()
+        df_lkws = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen, anzahl_hpc=anzahl_hpc,
+                                                   anzahl_ncs=anzahl_ncs)
+        df_ladeleistung = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen,
+                                                           anzahl_hpc=anzahl_hpc, anzahl_ncs=anzahl_ncs)
+        sortierte_lkw_liste = sortiere_lkws_nach_timstep(lkws=lkws)
+        timestepsarray = create_timestep_array(timesteps=timesteps, timedelta=timedelta)
 
-    lkws_geladen_gesamt = 0
-    lkws_nicht_geladen_gesamt = 0
+        lkws_geladen_gesamt = 0
+        lkws_nicht_geladen_gesamt = 0
+        for t in timestepsarray:
+            lkws_in_timestep = sortierte_lkw_liste.at[t, 'Ankommende LKWs']
+            df_lkws, df_ladeleistung, lkws_geladen_gesamt, lkws_nicht_geladen_gesamt = laden(df_ladesäulen_t=df_lkws,
+                                                                                             lkws_in_timestep=lkws_in_timestep,
+                                                                                             timestep=t,
+                                                                                             df_ladeleistung=df_ladeleistung,
+                                                                                             lkws_geladen_gesamt=lkws_geladen_gesamt)
+        gesamte_ladeleistung = gesamte_ladeleistung(df_ladeleistung=df_ladeleistung)
 
-    for t in timestepsarray:
-        lkws_in_timestep = sortierte_lkw_liste.at[t, 'Ankommende LKWs']
-        df_lkws, df_ladeleistung, lkws_geladen_gesamt, lkws_nicht_geladen_gesamt = laden(df_ladesäulen_t=df_lkws,
-                                                                                         lkws_in_timestep=lkws_in_timestep,
-                                                                                         timestep=t,
-                                                                                         df_ladeleistung=df_ladeleistung,
-                                                                                         lkws_nicht_geladen_gesamt=lkws_nicht_geladen_gesamt,
-                                                                                         lkws_geladen_gesamt=lkws_geladen_gesamt)
-    gesamte_ladeleistung = gesamte_ladeleistung(df_ladeleistung=df_ladeleistung)
+        plt.plot(gesamte_ladeleistung.index, gesamte_ladeleistung['Gesamtleistung'], marker='o', linestyle='-')
+        plt.xlabel('Zeit [min]')
+        plt.ylabel('Gesamtleistung [kW]')
+        plt.title('Lastgang')
 
-    plt.plot(gesamte_ladeleistung.index, gesamte_ladeleistung['Gesamtleistung'], marker='o', linestyle='-')
-    plt.xlabel('Zeit [min]')
-    plt.ylabel('Gesamtleistung [kW]')
-    plt.title('Lastgang')
-    plt.show()
+    else:
+        data = run_simulation()
+        timesteps = len(data)
 
-    print(df_lkws)
+
+        timestepsarray = create_timestep_array(timesteps=timesteps, timedelta=timedelta)
+
+        lkws_geladen_gesamt = 0
+        lkws_nicht_geladen_gesamt = 0
+        gesamt_df = pd.DataFrame()
+        gesamt_df_nicht_ladende_lkws = pd.DataFrame()
+
+        for run in data.columns:
+            df_lkws = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen,
+                                                       anzahl_hpc=anzahl_hpc,
+                                                       anzahl_ncs=anzahl_ncs)
+            df_ladeleistung = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen,
+                                                               anzahl_hpc=anzahl_hpc, anzahl_ncs=anzahl_ncs)
+            df_nicht_ladende_lkws = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=1, anzahl_ncs=1,
+                                                                 anzahl_hpc=0)
+            df_nicht_ladende_lkws.rename(columns={'Ladesäule 1 NCS': run}, inplace=True)
+            for t in timestepsarray:
+                lkws_in_timestep = data.at[t, run]
+                df_lkws, df_ladeleistung, lkws_geladen_gesamt, lkws_nicht_geladen_gesamt = laden(df_ladesäulen_t=df_lkws,
+                                                                                                 lkws_in_timestep=lkws_in_timestep,
+                                                                                                 timestep=t,
+                                                                                                 df_ladeleistung=df_ladeleistung,
+                                                                                                 lkws_geladen_gesamt=lkws_geladen_gesamt)
+                df_nicht_ladende_lkws.at[t, run] = lkws_nicht_geladen_gesamt
+            gesamte_ladeleistung_df = gesamte_ladeleistung(df_ladeleistung=df_ladeleistung)
+            gesamt_df[run] = gesamte_ladeleistung_df['Gesamtleistung']
+            gesamt_df[run] = pd.to_numeric(gesamt_df[run], errors='coerce')
+            gesamt_df_nicht_ladende_lkws[run] =df_nicht_ladende_lkws[run]
+            gesamt_df_nicht_ladende_lkws[run] = pd.to_numeric(gesamt_df_nicht_ladende_lkws[run], errors='coerce')
+
+            print(run)
+
+
+        if plot == 'Lastgang':
+            min_values = gesamt_df.min(axis=1, skipna=True)
+            max_values = gesamt_df.max(axis=1, skipna=True)
+            avg_values = gesamt_df.mean(axis=1, skipna=True)
+            plt.plot(gesamt_df.index, avg_values, label='Durchschnitt')
+            plt.fill_between(gesamt_df.index, min_values, max_values, alpha=0.2, label='Band (Min-Max)')
+
+            plt.xlabel('Index des Datenrahmens')
+            plt.ylabel('Werte')
+            plt.legend()
+            plt.show()
+        elif plot == 'nicht_ladende_LKWs':
+            min_values = gesamt_df_nicht_ladende_lkws.min(axis=1, skipna=True)
+            max_values = gesamt_df_nicht_ladende_lkws.max(axis=1, skipna=True)
+            avg_values = gesamt_df_nicht_ladende_lkws.mean(axis=1, skipna=True)
+            plt.plot(gesamt_df_nicht_ladende_lkws.index, avg_values, label='Durchschnitt')
+            plt.fill_between(gesamt_df_nicht_ladende_lkws.index, min_values, max_values, alpha=0.2, label='Band (Min-Max)')
+
+            plt.xlabel('Index des Datenrahmens')
+            plt.ylabel('Werte')
+            plt.legend()
+            plt.show()
