@@ -7,16 +7,17 @@ from approximation import *
 # config
 ############
 timedelta = 5  # time resolution in min
-anzahl_ncs = 2
-anzahl_hpc = 5
+anzahl_ncs = 15
+anzahl_hpc = 15
 max_akkustand = 80  # relative capacity when leaving the charging station
 leistung_ncs = 150
 leistung_hpc = 350
 netzanschlussleistung = (anzahl_ncs * leistung_ncs + anzahl_hpc * leistung_hpc) * 0.8
-nachtzeit_ncs = 480
-pausenzeit = 60
+nachtzeit_ncs = 480 # maximale Ladezeit NCS
+pausenzeit = 60 # maximale Ladezeit HPC
 Beispieldaten = False
-plot = 'nicht_ladende_LKWs' #nicht_ladende_LKWs, Lastgang
+# only if Beispieldaten = False :
+plot = 'nicht_ladende_LKWs' # nicht_ladende_LKWs, Lastgang
 ###########
 
 
@@ -221,6 +222,7 @@ if __name__ == '__main__':
         plt.xlabel('Zeit [min]')
         plt.ylabel('Gesamtleistung [kW]')
         plt.title('Lastgang')
+        plt.show()
 
     else:
         data = run_simulation()
@@ -233,8 +235,10 @@ if __name__ == '__main__':
         lkws_nicht_geladen_gesamt = 0
         gesamt_df = pd.DataFrame()
         gesamt_df_nicht_ladende_lkws = pd.DataFrame()
+        ladequoten = {}
 
         for run in data.columns:
+            # Dataframes für lkws, ladeleistungen und nicht ladende lkws deklarieren
             df_lkws = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=anzahl_ladesäulen,
                                                        anzahl_hpc=anzahl_hpc,
                                                        anzahl_ncs=anzahl_ncs)
@@ -243,6 +247,9 @@ if __name__ == '__main__':
             df_nicht_ladende_lkws = create_dataframe_with_dimensions(num_rows=timesteps, num_columns=1, anzahl_ncs=1,
                                                                  anzahl_hpc=0)
             df_nicht_ladende_lkws.rename(columns={'Ladesäule 1 NCS': run}, inplace=True)
+
+            summe_nicht_ladende_lkws = 0
+            lkws_geladen_gesamt = 0
             for t in timestepsarray:
                 lkws_in_timestep = data.at[t, run]
                 df_lkws, df_ladeleistung, lkws_geladen_gesamt, lkws_nicht_geladen_gesamt = laden(df_ladesäulen_t=df_lkws,
@@ -251,13 +258,21 @@ if __name__ == '__main__':
                                                                                                  df_ladeleistung=df_ladeleistung,
                                                                                                  lkws_geladen_gesamt=lkws_geladen_gesamt)
                 df_nicht_ladende_lkws.at[t, run] = lkws_nicht_geladen_gesamt
+                summe_nicht_ladende_lkws += lkws_nicht_geladen_gesamt
             gesamte_ladeleistung_df = gesamte_ladeleistung(df_ladeleistung=df_ladeleistung)
             gesamt_df[run] = gesamte_ladeleistung_df['Gesamtleistung']
             gesamt_df[run] = pd.to_numeric(gesamt_df[run], errors='coerce')
             gesamt_df_nicht_ladende_lkws[run] =df_nicht_ladende_lkws[run]
             gesamt_df_nicht_ladende_lkws[run] = pd.to_numeric(gesamt_df_nicht_ladende_lkws[run], errors='coerce')
 
+            ladequote = lkws_geladen_gesamt / (summe_nicht_ladende_lkws + lkws_geladen_gesamt)
+            ladequoten[run] = ladequote
+
             print(run)
+            print(f"Ladequote: {ladequote}")
+            print(f"nicht geladene LKWs: {summe_nicht_ladende_lkws}")
+            print(f"geladene LKWs: {lkws_geladen_gesamt}")
+
 
 
         if plot == 'Lastgang':

@@ -7,16 +7,25 @@ import os
 from main import *
 import random
 
+#config
+################
+start_date = 210104
+end_date = 210110
+anzahl_simulationen = 19
+plot_type = 'BEV' # Verkehr, BEV
+anteil_bev = 0.4
+tankwahrscheinlichkeit = 0.05
+################
+
+
+
+
 # Dateiname der CSV-Datei
 csv_dateiname = 'zst5651_2021.csv'
 
 # Dateipfad zur CSV-Datei erstellen
 csv_dateipfad = os.path.join(os.getcwd(), csv_dateiname)
 
-start_date = 210104
-end_date = 210110
-
-anzahl_simulationen = 19
 
 def read_lkw_data(csv_dateipfad=csv_dateipfad):
     # LKW-Daten aus csv einlesen und relevante Spalten summieren
@@ -81,20 +90,19 @@ def read_lkw_data(csv_dateipfad=csv_dateipfad):
     print(f"Summe aller LKWs in einem Jahr aus den Ausgangsdaten: {sum_y_values}")
     print(f"Summe aller LKWs in einem Jahr aus den approximierten Daten: {summe_lkws}")
 
-    #Plot der Original-Stufenfunktion und der approximierten stetigen Funktion
-    # plt.step(x_values, y_values, label='Stufenfunktion', where='post')
-    # plt.plot(x_continuous, y_continuous, label='Approximierte Funktion')
-    # plt.step(x_continuous, y_continuous, label='Approximierte Stufenfunktion', where='post')
 
-    #Markieren der Stunden wo sich die Ausgangsdaten und die approximierten Daten um mehr als 20 LKWs unterscheiden
-    # for i, diff in enumerate(differenzen):
-    #     if diff > 20:
-    #         plt.scatter(x_values[i], y_values[i], color='red')
+    if plot_type == 'Verkehr':
+        #Plot der Original-Stufenfunktion und der approximierten stetigen Funktion
+        plt.step(x_values, y_values, label='Stufenfunktion', where='post')
+        plt.plot(x_continuous, y_continuous, label='Approximierte Funktion')
+        plt.step(x_continuous, y_continuous, label='Approximierte Stufenfunktion', where='post')
 
-    # plt.legend()
-    # plt.show()
-
-    dummy=0
+        #Markieren der Stunden wo sich die Ausgangsdaten und die approximierten Daten um mehr als 20 LKWs unterscheiden
+        # for i, diff in enumerate(differenzen):
+        #     if diff > 20:
+        #         plt.scatter(x_values[i], y_values[i], color='red')
+        plt.legend()
+        plt.show()
 
     return lkws_in_timesteps
 
@@ -115,14 +123,11 @@ def generate_bev_lkw_data(lkws_in_timesteps, probability):
             if random_number <= probability:
                 summe_bev_in_timestep += 1
                 bev_lkw = generate_new_lkw(ankommenszeit=lkws_in_timesteps[index][1])
-
                 bev_lkws_in_timestep.append(bev_lkw)
-                dummy = 0
         df_ankommende_bev_lkws_anzahl['Ankommende LKWs'].iloc[index] = summe_bev_in_timestep
         df_ankommende_bev_lkws['Ankommende LKWs'].iloc[index] = bev_lkws_in_timestep
         summe_bev_gesamt += summe_bev_in_timestep
 
-    dummy = 0
     return df_ankommende_bev_lkws_anzahl, df_ankommende_bev_lkws ,summe_bev_gesamt
 
 def generate_new_lkw(ankommenszeit):
@@ -178,39 +183,38 @@ def run_simulation():
 if __name__ == '__main__':
 
     lkws_in_timesteps = read_lkw_data(csv_dateipfad=csv_dateipfad)
+    probability = tankwahrscheinlichkeit * anteil_bev
     #bev_lkws_in_timesteps, summe_bev_gesamt = generate_bev_lkw_data(lkws_in_timesteps=lkws_in_timesteps, probability=0.02)
 
-    gesamt_df_anzahl = pd.DataFrame()
-    gesamt_df = pd.DataFrame()
+    if plot_type == 'BEV':
+        gesamt_df_anzahl = pd.DataFrame()
+        gesamt_df = pd.DataFrame()
 
+        # Wiederhole die Funktion n Mal und füge die Ergebnisse dem Gesamtdatenrahmen hinzu
+        for i in range(anzahl_simulationen):
+            bev_lkws_in_timesteps_anzahl, bev_lkws_in_timesteps ,summe_bev_gesamt = generate_bev_lkw_data(lkws_in_timesteps=lkws_in_timesteps, probability=probability)
+            gesamt_df_anzahl[f'Run_{i}'] = bev_lkws_in_timesteps_anzahl['Ankommende LKWs']
+            gesamt_df_anzahl[f'Run_{i}'] = pd.to_numeric(gesamt_df_anzahl[f'Run_{i}'], errors='coerce')
+            gesamt_df[f'Run_{i}'] = bev_lkws_in_timesteps_anzahl['Ankommende LKWs']
+            print(f'Berechne Iteration {i + 1}/{anzahl_simulationen}')
 
-    # Wiederhole die Funktion n Mal und füge die Ergebnisse dem Gesamtdatenrahmen hinzu
-    for i in range(anzahl_simulationen):
-        bev_lkws_in_timesteps_anzahl, bev_lkws_in_timesteps ,summe_bev_gesamt = generate_bev_lkw_data(lkws_in_timesteps=lkws_in_timesteps, probability=0.02)
-        gesamt_df_anzahl[f'Run_{i}'] = bev_lkws_in_timesteps_anzahl['Ankommende LKWs']
-        gesamt_df_anzahl[f'Run_{i}'] = pd.to_numeric(gesamt_df_anzahl[f'Run_{i}'], errors='coerce')
-        gesamt_df[f'Run_{i}'] = bev_lkws_in_timesteps_anzahl['Ankommende LKWs']
-        print(f'Berechne Iteration {i + 1}/{anzahl_simulationen}')
+        min_values = gesamt_df_anzahl.min(axis=1, skipna=True)
+        max_values = gesamt_df_anzahl.max(axis=1, skipna=True)
+        avg_values = gesamt_df_anzahl.mean(axis=1, skipna=True)
+        median_values = gesamt_df_anzahl.median(axis=1)
 
+        # Plotte die Ergebnisse der Anzahl der BEV-LKW in jedem timestep als Band
+        plt.plot(gesamt_df_anzahl.index, avg_values, label='Durchschnitt')
+        plt.plot(gesamt_df_anzahl.index, median_values, label='Median', color='orange')
 
-    min_values = gesamt_df_anzahl.min(axis=1, skipna=True)
-    max_values = gesamt_df_anzahl.max(axis=1, skipna=True)
-    avg_values = gesamt_df_anzahl.mean(axis=1, skipna=True)
-    median_values = gesamt_df_anzahl.median(axis=1)
+        plt.fill_between(gesamt_df_anzahl.index, min_values, max_values, alpha=0.2, label='Band (Min-Max)')
 
-    # Plotte die Ergebnisse der Anzahl der BEV-LKW in jedem timestep als Band
-    plt.plot(gesamt_df_anzahl.index, avg_values, label='Durchschnitt')
-    plt.plot(gesamt_df_anzahl.index, median_values, label='Median', color='orange')
-
-    plt.fill_between(gesamt_df_anzahl.index, min_values, max_values, alpha=0.2, label='Band (Min-Max)')
-
-    plt.xlabel('Index des Datenrahmens')
-    plt.ylabel('Werte')
-    plt.legend()
-    plt.show()
-    dummy =0
-    #print(f"Summe aller BEV LKWs in einem Jahr aus den approximierten Daten: {summe_bev_gesamt}")
-    #print(f"BEV Quote: {summe_bev_gesamt/sum(lkws_in_timesteps)}")
+        plt.xlabel('Index des Datenrahmens')
+        plt.ylabel('Werte')
+        plt.legend()
+        plt.show()
+        #print(f"Summe aller BEV LKWs in einem Jahr aus den approximierten Daten: {summe_bev_gesamt}")
+        #print(f"BEV Quote: {summe_bev_gesamt/sum(lkws_in_timesteps)}")
 
 
 
