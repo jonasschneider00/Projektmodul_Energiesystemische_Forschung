@@ -7,11 +7,13 @@ import os
 from main import *
 import random
 
+#from main import create_dataframe_with_dimensions
+
 #config
 ################
 start_date = 210104
 end_date = 210110
-anzahl_simulationen = 19
+anzahl_simulationen = 10
 plot_type = 'BEV' # Verkehr, BEV
 anteil_bev = 0.4
 tankwahrscheinlichkeit = 0.05
@@ -101,6 +103,8 @@ def read_lkw_data(csv_dateipfad=csv_dateipfad):
         # for i, diff in enumerate(differenzen):
         #     if diff > 20:
         #         plt.scatter(x_values[i], y_values[i], color='red')
+        plt.xlabel('Zeit [min]')
+        plt.ylabel('Anzahl der LKWs pro timestep')
         plt.legend()
         plt.show()
 
@@ -108,8 +112,7 @@ def read_lkw_data(csv_dateipfad=csv_dateipfad):
 
 
 def generate_bev_lkw_data(lkws_in_timesteps, probability):
-    df_ankommende_bev_lkws_anzahl = create_dataframe_with_dimensions(num_rows=len(lkws_in_timesteps), num_columns=1,
-                                                                 anzahl_ncs=1, anzahl_hpc=0)
+    df_ankommende_bev_lkws_anzahl = create_dataframe_with_dimensions(num_rows=len(lkws_in_timesteps), anzahl_ladesäulen_typ={'NCS': 1, 'HPC': 0})
     df_ankommende_bev_lkws_anzahl.rename(columns={'Ladesäule 1 NCS': 'Ankommende LKWs'}, inplace=True)
 
     df_ankommende_bev_lkws = df_ankommende_bev_lkws_anzahl.copy()
@@ -133,8 +136,17 @@ def generate_bev_lkw_data(lkws_in_timesteps, probability):
 def generate_new_lkw(ankommenszeit):
     akkustand = random.randint(10, 30)
     kapazität = random.choice([400, 500, 600])
+    intervall_dict = {}
+    kum_summe = 0
+    for name, wert in verteilung_ladesäulen_typ.items():
+        intervall_dict[name] = [kum_summe]
+        kum_summe += wert
+        intervall_dict[name].append(kum_summe)
     if 360 <= ankommenszeit <= 1260:
-        ladesäule = 'HPC'
+        random_number = random.random()
+        for name in verteilung_ladesäulen_typ.keys():
+            if intervall_dict[name][0]<=random_number<=intervall_dict[name][1]:
+                ladesäule = name
     else:
         ladesäule = 'NCS'
     return [akkustand, kapazität, ladesäule, 0]
@@ -177,7 +189,8 @@ def run_simulation():
     for i in range(anzahl_simulationen):
         bev_lkws_in_timesteps_anzahl, bev_lkws_in_timesteps ,summe_bev_gesamt = generate_bev_lkw_data(lkws_in_timesteps=lkws_in_timesteps, probability=0.02)
         gesamt_df[f'Run_{i}'] = bev_lkws_in_timesteps['Ankommende LKWs']
-        print(f'Berechne Iteration {i + 1}/{anzahl_simulationen}')
+        print(f'Generiere Inputdaten {i + 1}/{anzahl_simulationen}')
+        #print(f'Summe BEV gesamt: {summe_bev_gesamt}')
     return gesamt_df
 
 if __name__ == '__main__':
@@ -209,8 +222,8 @@ if __name__ == '__main__':
 
         plt.fill_between(gesamt_df_anzahl.index, min_values, max_values, alpha=0.2, label='Band (Min-Max)')
 
-        plt.xlabel('Index des Datenrahmens')
-        plt.ylabel('Werte')
+        plt.xlabel('Zeit [min]')
+        plt.ylabel('Anzahl der ankommenden BEV-LKWs pro timestep')
         plt.legend()
         plt.show()
         #print(f"Summe aller BEV LKWs in einem Jahr aus den approximierten Daten: {summe_bev_gesamt}")
