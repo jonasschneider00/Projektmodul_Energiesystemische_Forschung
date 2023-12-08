@@ -13,10 +13,12 @@ import random
 ################
 start_date = 210104
 end_date = 210110
-anzahl_simulationen = 10
-plot_type = 'BEV' # Verkehr, BEV
+anzahl_simulationen = 5
+
 anteil_bev = 0.4
 tankwahrscheinlichkeit = 0.05
+
+plot_type = 'BEV' # Verkehr, BEV
 ################
 
 

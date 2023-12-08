@@ -19,6 +19,8 @@ netzanschlussleistung = 7000 #(anzahl_ncs * leistung_ncs + anzahl_hpc * leistung
 Beispieldaten = False
 # only if Beispieldaten = False :
 plot = 'Energiemenge' # nicht_ladende_LKWs, Lastgang, Energiemenge
+
+load_existing_input = True
 ###########
 
 
@@ -226,6 +228,60 @@ def tägliche_energiemenge(df_ladeleistung):
 
     return result_df
 
+def save_input_data_to_pickle(data, folder):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    file_name = f"{start_date}_{end_date}_{anzahl_simulationen}_{int(anteil_bev * 100)}_{int(tankwahrscheinlichkeit * 100)}.pkl"
+    file_path = os.path.join(folder, file_name)
+    data.to_pickle(file_path)
+
+def load_input_data_from_pickle(folder):
+    file_name = f"{start_date}_{end_date}_{anzahl_simulationen}_{int(anteil_bev * 100)}_{int(tankwahrscheinlichkeit * 100)}.pkl"
+    file_path = os.path.join(folder, file_name)
+    if os.path.exists(file_path):
+        return pd.read_pickle(file_path)
+    else:
+        raise FileNotFoundError(f"Die Datei {file_path} existiert nicht.")
+
+def save_output_data_to_pickle(gesamt_df, gesamt_df_nicht_ladende_lkws, ladequoten, energien_dict, df_lkws_dict, df_ladeleistung_dict, folder):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+
+    file_name = f"{start_date}_{end_date}_{anzahl_simulationen}_{int(anteil_bev * 100)}_{int(tankwahrscheinlichkeit * 100)}_output.pkl"
+    file_path = os.path.join(folder, file_name)
+
+    output_data = {
+        'gesamt_df': gesamt_df,
+        'gesamt_df_nicht_ladende_lkws': gesamt_df_nicht_ladende_lkws,
+        'ladequoten': ladequoten,
+        'energien_dict': energien_dict,
+        'df_lkws_dict': df_lkws_dict,
+        'df_ladeleistung_dict': df_ladeleistung_dict
+    }
+
+    pd.to_pickle(output_data, file_path)
+    print(f"Die Ausgabedaten wurden erfolgreich in '{file_path}' gespeichert.")
+
+def load_output_data_from_pickle(folder):
+    file_name = f"{start_date}_{end_date}_{anzahl_simulationen}_{int(anteil_bev * 100)}_{int(tankwahrscheinlichkeit * 100)}_output.pkl"
+    file_path = os.path.join(folder, file_name)
+
+    if os.path.exists(file_path):
+        output_data = pd.read_pickle(file_path)
+
+        gesamt_df = output_data['gesamt_df']
+        gesamt_df_nicht_ladende_lkws = output_data['gesamt_df_nicht_ladende_lkws']
+        ladequoten = output_data['ladequoten']
+        energien_dict = output_data['energien_dict']
+        df_lkws_dict = output_data['df_lkws_dict']
+        df_ladeleistung_dict = output_data['df_ladeleistung_dict']
+
+        return gesamt_df, gesamt_df_nicht_ladende_lkws, ladequoten, energien_dict, df_lkws_dict, df_ladeleistung_dict
+
+    else:
+        raise FileNotFoundError(f"Die Datei {file_path} existiert nicht.")
+
+
 
 if __name__ == '__main__':
     if Beispieldaten:
@@ -257,18 +313,34 @@ if __name__ == '__main__':
         plt.show()
 
     else:
-        data = run_simulation()
+        if load_existing_input:
+            try:
+                data = load_input_data_from_pickle('INPUT')
+                timesteps = len(data)
+                timestepsarray = create_timestep_array(timesteps=timesteps, timedelta=timedelta)
+                data.index = timestepsarray
+
+                print("Daten erfolgreich aus Pickle-Datei geladen.")
+            except FileNotFoundError:
+                print("Die CSV-Datei existiert nicht. Führe Simulation aus.")
+                load_existing_input = False
+
+        if not load_existing_input:
+            data = run_simulation()
+            save_input_data_to_pickle(data, 'INPUT')
+            print("Daten erfolgreich simuliert und in Pickle-Datei gespeichert.")
+
         timesteps = len(data)
-
-
         timestepsarray = create_timestep_array(timesteps=timesteps, timedelta=timedelta)
 
         lkws_geladen_gesamt = 0
         lkws_nicht_geladen_gesamt = 0
-        gesamt_df = pd.DataFrame()
-        gesamt_df_nicht_ladende_lkws = pd.DataFrame()
-        ladequoten = {}
-        energien_dict = {}
+        gesamt_df = pd.DataFrame() # Speichert die Gesamtleistungen des Ladehubs in jedem timestep aus jedem run
+        gesamt_df_nicht_ladende_lkws = pd.DataFrame() # Speichert die nicht ladenden LKWs in jedem timestep aus jedem run
+        ladequoten = {} # Speichert die Ladequoten des Ladehubs in jedem timestep aus jedem run
+        energien_dict = {} # Speichert alle täglichen Strommengen aus jedem run
+        df_lkws_dict = {}
+        df_ladeleistung_dict = {}
 
         for run in data.columns:
             # Dataframes für lkws, ladeleistungen und nicht ladende lkws deklarieren
@@ -293,7 +365,10 @@ if __name__ == '__main__':
                                                                                                  geladen_an_ladesäule_dict=geladen_an_ladesäule_dict)
                 df_nicht_ladende_lkws.at[t, run] = lkws_nicht_geladen_gesamt
                 summe_nicht_ladende_lkws += lkws_nicht_geladen_gesamt
-                dummy = 0
+
+            df_ladeleistung_dict[run]=df_ladeleistung
+            df_lkws_dict[run]=df_lkws
+
             gesamte_ladeleistung_df = gesamte_ladeleistung(df_ladeleistung=df_ladeleistung)
             gesamt_df[run] = gesamte_ladeleistung_df['Gesamtleistung']
             gesamt_df[run] = pd.to_numeric(gesamt_df[run], errors='coerce')
@@ -314,6 +389,11 @@ if __name__ == '__main__':
             print(geladen_an_ladesäule_dict)
             print("übertragene Energiemenge in [kWh]")
             print(energien)
+
+        save_output_data_to_pickle(gesamt_df=gesamt_df, gesamt_df_nicht_ladende_lkws=gesamt_df_nicht_ladende_lkws,
+                                   df_lkws_dict=df_lkws_dict, df_ladeleistung_dict=df_ladeleistung_dict,
+                                   energien_dict=energien_dict, ladequoten=ladequoten, folder='OUTPUT')
+
 
 
 
