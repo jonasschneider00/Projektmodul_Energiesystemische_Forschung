@@ -30,7 +30,7 @@ def read_lkw_data(csv_dateipfad=csv_dateipfad):
 
     # Daten für Säulendiagramm generieren (Breite: 1h, Höhe: stundenscharfer durchschnittlicher LKW-Verkehr in LKW/h)
     x_values = np.arange(hours_difference)
-    y_values = df['gesamt_LKW_R1'].to_numpy()
+    y_values = df['gesamt_LKW_R1'].to_numpy() * verkehrssteigerung
 
     # Polynomapproximation
     # lokale Extrema anpassen um Polynom-Approximation zu verbessern

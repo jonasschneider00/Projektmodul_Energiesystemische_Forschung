@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from approximation import *
-from plots import plot_energiemenge, plot_lastgang, plot_nicht_ladende_LKWs, plot_verkehr, plot_bev_anzahl
+from plots import plot_energiemenge, plot_lastgang, plot_nicht_ladende_LKWs, plot_verkehr, plot_bev_anzahl, plot_energien_pro_lkw, plot_ladezeiten_pro_lkw
 from config import *
 
 
@@ -215,7 +215,7 @@ def tägliche_energiemenge(df_ladeleistung):
 def save_input_data_to_pickle(data, df_gesamt_anzahl, verkehrsdaten, folder):
     if not os.path.exists(folder):
         os.makedirs(folder)
-    scenario_name = get_scenario_name()
+    scenario_name = f"{start_date}_{end_date}_{anzahl_simulationen}_{int(anteil_bev * 100)}_{int(tankwahrscheinlichkeit * 100)}"
     file_name = f"{scenario_name}.pkl"
     file_path = os.path.join(folder, file_name)
     input_data = {
@@ -227,7 +227,7 @@ def save_input_data_to_pickle(data, df_gesamt_anzahl, verkehrsdaten, folder):
 
 
 def load_input_data_from_pickle(folder):
-    scenario_name = get_scenario_name()
+    scenario_name = f"{start_date}_{end_date}_{anzahl_simulationen}_{int(anteil_bev * 100)}_{int(tankwahrscheinlichkeit * 100)}"
     file_name = f"{scenario_name}.pkl"
     file_path = os.path.join(folder, file_name)
     if os.path.exists(file_path):
@@ -431,6 +431,7 @@ def run_reale_daten(data):
 
 
 if __name__ == '__main__':
+    ladesäulentypen = list(anzahl_ladesäulen_typ.keys())
     if Beispieldaten:
         run_beispieldaten()
     else:
@@ -443,8 +444,7 @@ if __name__ == '__main__':
 
                 print("Daten erfolgreich aus Pickle-Datei geladen.")
             except FileNotFoundError:
-                print("Die CSV-Datei existiert nicht. Führe Simulation aus.")
-                load_existing_input = False
+                print("Die INPUT-Datei existiert nicht. Führe Simulation aus.")
 
         if not load_existing_input:
             data, df_gesamt_anzahl, verkehrsdaten = run_simulation()
@@ -461,5 +461,9 @@ if __name__ == '__main__':
         plot_energiemenge(energien_dict)
         plot_verkehr(verkehrsdaten)
         plot_bev_anzahl(df_gesamt_anzahl)
+        for ladesäulentyp in ladesäulentypen:
+            plot_energien_pro_lkw(gesamt_energiemengen_pro_lkw_dict, ladesäulentyp=ladesäulentyp)
+            plot_ladezeiten_pro_lkw(gesamt_ladezeiten_pro_lkw_dict, ladesäulentyp=ladesäulentyp)
+
 
 
