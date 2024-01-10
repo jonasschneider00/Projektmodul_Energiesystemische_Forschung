@@ -6,7 +6,9 @@ from approximation import *
 from plots import plot_energiemenge, plot_lastgang, plot_nicht_ladende_LKWs, plot_verkehr, plot_bev_anzahl, plot_energien_pro_lkw, plot_ladezeiten_pro_lkw
 from config import *
 
-
+working_directory = os.getcwd()
+file_path = os.path.join(working_directory, 'Ladekurven.xlsx')
+df_ladekurven = pd.read_excel(file_path)
 def get_scenario_name():
     scenario_name = f"{start_date}_{end_date}_{anzahl_simulationen}_{int(anteil_bev * 100)}_{int(tankwahrscheinlichkeit * 100)}_{netzanschlussleistung}"
     return scenario_name
@@ -42,24 +44,9 @@ def sortiere_lkws_nach_timstep(lkws):
     return df
 
 
-def erstelle_Ladekurve():
-    # num_rows = 101
-    # cell_value = 600
-    # df = pd.DataFrame({'Ladeleistung': [cell_value] * num_rows})
-    # daten = []
-    # for i in range(0, 100, 10):
-    #     for j in range(i, i + 10):
-    #         if j <= 100:
-    #             daten.append((j, 600 - (i // 10) * 10))
-    # df = pd.DataFrame(daten, columns=['Index', 'Ladeleistung'])
-    # Erstelle eine Liste mit den gewünschten Werten entsprechend den angegebenen Intervallen
-    values = [1.0] * 40 + [0.95] * 10 + [0.9] * 10 + [0.85] * 10 + [0.8] * 10 + [0.6] * 10 + [0.4] * 5 + [0.2] * 6
-
-    # Erstelle das DataFrame
-    df = pd.DataFrame({'rel. Ladeleistung': values})
-
-    # Setze die Indizes von 0 bis 100
-    df.index = range(101)
+def erstelle_Ladekurve(kapazität):
+    df = pd.DataFrame()
+    df['rel. Ladeleistung'] = df_ladekurven[kapazität]
 
     return df
 
@@ -88,7 +75,10 @@ def getladeleistung(ladestand, ladekurve, ladesäule):
     namen = anzahl_ladesäulen_typ.keys()
     for name in namen:
         if name in ladesäule:
-            return ladekurve.at[ladestand, 'rel. Ladeleistung'] * max_ladeleistung_ladesäulen_typ[name]
+            try:
+                return ladekurve.at[ladestand, 'rel. Ladeleistung'] * max_ladeleistung_ladesäulen_typ[name]
+            except:
+                dummy = 0
     print('Fehler bei Leistungsdefinition der Ladesäulen')
 
 
@@ -106,7 +96,7 @@ def laden(df_ladesäulen_t, lkws_in_timestep, timestep, df_ladeleistung, lkws_ge
         for l, ladesäule in enumerate(df_t1.columns):
             lkws_t_minus_1 = df_t1.at[timestep - timedelta, ladesäule]
             for i, lkw in enumerate(lkws_t_minus_1):
-                vergleichsleistung += getladeleistung(ladestand=round(lkw[0]), ladekurve=erstelle_Ladekurve(),
+                vergleichsleistung += getladeleistung(ladestand=round(lkw[0]), ladekurve=erstelle_Ladekurve(lkw[1]),
                                                       ladesäule=ladesäule)
         ladefaktor = 0
         if vergleichsleistung <= netzanschlussleistung:
@@ -119,13 +109,19 @@ def laden(df_ladesäulen_t, lkws_in_timestep, timestep, df_ladeleistung, lkws_ge
             ladeleistungen = []
             lkws_t_0 = []
             max_time_ladesäule = get_max_time(ladesäule=ladesäule)
+            dummy =0
             for i, lkw in enumerate(lkws_t_minus_1):
                 lkw_copy = lkw[:]
-                ladeleistungen.append(getladeleistung(ladestand=round(lkw[0]), ladekurve=erstelle_Ladekurve(),
+                ladeleistungen.append(getladeleistung(ladestand=round(lkw[0]), ladekurve=erstelle_Ladekurve(lkw_copy[1]),
                                                       ladesäule=ladesäule) * ladefaktor)
                 if lkw_copy[0] < max_akkustand:
                     lkw_t_0 = lade_lkw(lkw=lkw_copy, ladeleistung=ladeleistungen[i])
-                    if lkw_t_0[0][0] < max_akkustand and lkw_copy[3] < max_time_ladesäule:
+                    if lkw_t_0[0][0] < max_akkustand and lkw_copy[5] < max_time_ladesäule:
+                        lkws_t_0 += lkw_t_0
+                        summe_ladender_lkws_dict[lkw[2]] += 1
+                        df_t1_leistung.at[timestep - timedelta, ladesäule] = ladeleistungen
+                    elif lkw_copy[5] < max_time_ladesäule and lkw_t_0[0][0] > max_akkustand:
+                        lkw_t_0 = parke_lkw(lkw=lkw_copy, akkustand=lkw_t_0[0][0])
                         lkws_t_0 += lkw_t_0
                         summe_ladender_lkws_dict[lkw[2]] += 1
                         df_t1_leistung.at[timestep - timedelta, ladesäule] = ladeleistungen
@@ -133,7 +129,15 @@ def laden(df_ladesäulen_t, lkws_in_timestep, timestep, df_ladeleistung, lkws_ge
                         df_t1_leistung.at[timestep - timedelta, ladesäule] = ladeleistungen
                         energiemengen_pro_lkw_dict[lkw[2]].append(lkw_t_0[0][4])
                         ladezeiten_pro_lkw_dict[lkw[2]].append(lkw_t_0[0][3])
+                elif lkw_copy[0] > max_akkustand and lkw_copy[5] < max_time_ladesäule:
+                    lkw_t_0 = parke_lkw(lkw=lkw_copy, akkustand=lkw_copy[0])
+                    lkws_t_0 += lkw_t_0
+                    summe_ladender_lkws_dict[lkw[2]] += 1
+                    energiemengen_pro_lkw_dict[lkw[2]].append(lkw_t_0[0][4])
+                    ladezeiten_pro_lkw_dict[lkw[2]].append(lkw_t_0[0][3])
+
             df_t1.at[timestep, ladesäule] = lkws_t_0
+            dummy =0
     if len(lkws_in_timestep) == 0:
         return df_t1, df_t1_leistung, lkws_geladen_gesamt, lkws_nicht_geladen_gesamt
     else:
@@ -177,7 +181,15 @@ def lade_lkw(lkw, ladeleistung):
     lkw_t1[0] += round(((ladeleistung * timedelta / 60) / lkw_t1[1]) * 100, 2)
     lkw_t1[3] += timedelta
     lkw_t1[4] += ladeleistung * timedelta / 60
+    lkw_t1[5] += timedelta
     return [lkw_t1]
+
+def parke_lkw(lkw, akkustand):
+    lkw_t1 = lkw
+    lkw_t1[5] += timedelta
+    lkw_t1[0] = akkustand
+    return [lkw_t1]
+
 
 
 def get_gesamte_ladeleistung(df_ladeleistung, timesteps):

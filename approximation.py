@@ -82,8 +82,17 @@ def read_lkw_data(csv_dateipfad=csv_dateipfad):
 
     return lkws_in_timesteps, verkehrsdaten
 
+def read_LKW_probability_data():
+    working_directory = os.getcwd()
+    file_path = os.path.join(working_directory, 'Abbiegewahrscheinlichkeiten.xlsx')
+    try:
+        df = pd.read_excel(file_path)
+        return df
+    except Exception as e:
+        print(f"Fehler beim Lesen der Abbiegewahrscheinlichkeiten.xlsx Datei: {e}")
+        return None
 
-def generate_bev_lkw_data(lkws_in_timesteps, probability):
+def generate_bev_lkw_data(lkws_in_timesteps, probability_df):
     df_ankommende_bev_lkws_anzahl = create_dataframe_with_dimensions(num_rows=len(lkws_in_timesteps), anzahl_ladesäulen_typ={'NCS': 1, 'HPC': 0})
     df_ankommende_bev_lkws_anzahl.rename(columns={'Ladesäule 1 NCS': 'Ankommende LKWs'}, inplace=True)
 
@@ -91,37 +100,48 @@ def generate_bev_lkw_data(lkws_in_timesteps, probability):
 
     summe_bev_gesamt = 0
     for index, value in enumerate(df_ankommende_bev_lkws_anzahl['Ankommende LKWs']):
+        tageszeit = index*timedelta % 1440
+        abbiegewahrscheinlichkeiten_tageszeit = probability_df.loc[probability_df['Tageszeit'] == tageszeit]
+        abbiegewahrscheinlichkeiten_tageszeit = abbiegewahrscheinlichkeiten_tageszeit.drop('Tageszeit', axis=1)
+
+        spalten = abbiegewahrscheinlichkeiten_tageszeit.columns
+
+        # Intervallgrenzen berechnen
+        intervall_grenzen = [0] + [abbiegewahrscheinlichkeiten_tageszeit[col].values[0] for col in spalten]
+        intervall_grenzen = [sum(intervall_grenzen[:i + 1]) for i in range(len(intervall_grenzen))]
+
         summe_bev_in_timestep = 0.0
         bev_lkws_in_timestep = []
         for lkw in range(lkws_in_timesteps[index][0]):
-            random_number = random.random()  # Generiere eine Zufallszahl zwischen 0 und 1
-            if random_number <= probability:
-                summe_bev_in_timestep += 1
-                bev_lkw = generate_new_lkw(ankommenszeit=lkws_in_timesteps[index][1])
-                bev_lkws_in_timestep.append(bev_lkw)
+            zufallszahl = random.random()
+            for i in range(len(intervall_grenzen) - 1):
+                if intervall_grenzen[i] < zufallszahl <= intervall_grenzen[i + 1]:
+                    l = spalten[i]
+                    summe_bev_in_timestep += 1
+                    bev_lkw = generate_new_lkw(ankommenszeit=lkws_in_timesteps[index][1], l_type=l)
+                    bev_lkws_in_timestep.append(bev_lkw)
+                    break
         df_ankommende_bev_lkws_anzahl['Ankommende LKWs'].iloc[index] = summe_bev_in_timestep
         df_ankommende_bev_lkws['Ankommende LKWs'].iloc[index] = bev_lkws_in_timestep
         summe_bev_gesamt += summe_bev_in_timestep
 
-    return df_ankommende_bev_lkws_anzahl, df_ankommende_bev_lkws ,summe_bev_gesamt
+    return df_ankommende_bev_lkws_anzahl, df_ankommende_bev_lkws, summe_bev_gesamt
 
-def generate_new_lkw(ankommenszeit):
+def generate_new_lkw(ankommenszeit, l_type):
     akkustand = random.randint(10, 30)
-    kapazität = random.choice([400, 500, 600])
     intervall_dict = {}
     kum_summe = 0
-    for name, wert in verteilung_ladesäulen_typ.items():
+    kapazität = 20
+    for name, wert in verteilung_kapazitäten.items():
         intervall_dict[name] = [kum_summe]
         kum_summe += wert
         intervall_dict[name].append(kum_summe)
-    if 360 <= ankommenszeit <= 1260:
-        random_number = random.random()
-        for name in verteilung_ladesäulen_typ.keys():
-            if intervall_dict[name][0]<=random_number<=intervall_dict[name][1]:
-                ladesäule = name
-    else:
-        ladesäule = 'NCS'
-    return [akkustand, kapazität, ladesäule, 0, 0]
+    random_number = random.random()
+    for name in verteilung_kapazitäten.keys():
+        if intervall_dict[name][0] <= random_number <= intervall_dict[name][1]:
+            kapazität = name
+
+    return [akkustand, kapazität, l_type, 0, 0, 0]
 
 
 # Hilfsfunktionen
@@ -157,11 +177,11 @@ def anpassen_liste(lst):
 
 def run_simulation():
     lkws_in_timesteps, verkehrsdaten = read_lkw_data(csv_dateipfad=csv_dateipfad)
-    probability = tankwahrscheinlichkeit * anteil_bev
+    probability_df = read_LKW_probability_data()
     gesamt_df = pd.DataFrame()
     df_gesamt_anzahl = pd.DataFrame()
     for i in range(anzahl_simulationen):
-        bev_lkws_in_timesteps_anzahl, bev_lkws_in_timesteps ,summe_bev_gesamt = generate_bev_lkw_data(lkws_in_timesteps=lkws_in_timesteps, probability=probability)
+        bev_lkws_in_timesteps_anzahl, bev_lkws_in_timesteps ,summe_bev_gesamt = generate_bev_lkw_data(lkws_in_timesteps=lkws_in_timesteps, probability_df=probability_df)
         gesamt_df[f'Run_{i}'] = bev_lkws_in_timesteps['Ankommende LKWs']
         df_gesamt_anzahl[f'Run_{i}'] = bev_lkws_in_timesteps_anzahl['Ankommende LKWs']
         df_gesamt_anzahl[f'Run_{i}'] = pd.to_numeric(df_gesamt_anzahl[f'Run_{i}'], errors='coerce')
