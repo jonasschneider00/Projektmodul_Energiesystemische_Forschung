@@ -107,8 +107,9 @@ def generate_bev_lkw_data(lkws_in_timesteps, probability_df):
         spalten = abbiegewahrscheinlichkeiten_tageszeit.columns
 
         # Intervallgrenzen berechnen
-        intervall_grenzen = [0] + [abbiegewahrscheinlichkeiten_tageszeit[col].values[0] for col in spalten]
-        intervall_grenzen = [sum(intervall_grenzen[:i + 1]) for i in range(len(intervall_grenzen))]
+        intervall_grenzen_1 = [0] + [abbiegewahrscheinlichkeiten_tageszeit[col].values[0] for col in spalten]
+        intervall_grenzen_1 = [sum(intervall_grenzen_1[:i + 1]) for i in range(len(intervall_grenzen_1))]
+        intervall_grenzen = [x * anteil_bev for x in intervall_grenzen_1]
 
         summe_bev_in_timestep = 0.0
         bev_lkws_in_timestep = []
@@ -128,7 +129,7 @@ def generate_bev_lkw_data(lkws_in_timesteps, probability_df):
     return df_ankommende_bev_lkws_anzahl, df_ankommende_bev_lkws, summe_bev_gesamt
 
 def generate_new_lkw(ankommenszeit, l_type):
-    akkustand = random.randint(10, 30)
+    akkustand = random.randint(5, 30)
     intervall_dict = {}
     kum_summe = 0
     kapazität = 20

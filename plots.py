@@ -23,13 +23,16 @@ def plot_lastgang(gesamt_df_ladeleistung):
     plt.plot(gesamt_df_ladeleistung.index, avg_values, label='Durchschnitt')
     plt.fill_between(gesamt_df_ladeleistung.index, min_values, max_values, alpha=0.2, label='Band (Min-Max)')
 
+    max_leistung = max_values.max()
+    print(f"maximale Leistung: {max_leistung} kW")
+
     plt.xlabel('Zeit [min]')
     plt.ylabel('Leistung [kW]')
     plt.legend()
 
     if save_plots:
         scenario_name = get_scenario_name()
-        file_name = f"{scenario_name}_lastprofil.pdf"
+        file_name = f"{scenario_name}_lastprofil.png"
         file_path = os.path.join(folder, file_name)
         plt.savefig(file_path)
 
@@ -67,6 +70,9 @@ def plot_energiemenge(energien_dict):
     average_data = sum([df.values for df in energien_dict.values()]) / len(energien_dict)
     average_df = pd.DataFrame(average_data, index=energien_dict['Run_0'].index, columns=energien_dict['Run_0'].columns)
 
+    gesamte_energiemenge = average_df.values.sum()
+    print(f"gesamte Energiemenge: {gesamte_energiemenge} kWh")
+
     fig, ax = plt.subplots()
     average_df.plot(kind='bar', stacked=True, ax=ax, width=0.8, figsize=(10, 6))
     plt.xlabel('Tag')
@@ -102,12 +108,14 @@ def plot_verkehr(verkehrsdaten):
     # for i, diff in enumerate(differenzen):
     #     if diff > 20:
     #         plt.scatter(x_values[i], y_values[i], color='red')
+    #plt.xlim(0,24)
+    #plt.ylim(0,720)
     plt.xlabel('Zeit [h]')
     plt.ylabel('Anzahl der LKWs pro timestep')
-    plt.legend()
+    #plt.legend()
 
     scenario_name = get_scenario_name()
-    file_name = f"{scenario_name}_verkehr.pdf"
+    file_name = f"{scenario_name}_verkehr.png"
     file_path = os.path.join(folder, file_name)
     plt.savefig(file_path)
 
@@ -125,7 +133,7 @@ def plot_bev_anzahl(df_gesamt_anzahl):
 
     # Plotte die Ergebnisse der Anzahl der BEV-LKW in jedem timestep als Band
     plt.plot(df_gesamt_anzahl.index, avg_values, label='Durchschnitt')
-    plt.plot(df_gesamt_anzahl.index, median_values, label='Median', color='orange')
+    #plt.plot(df_gesamt_anzahl.index, median_values, label='Median', color='orange')
 
     plt.fill_between(df_gesamt_anzahl.index, min_values, max_values, alpha=0.2, label='Band (Min-Max)')
 
@@ -135,7 +143,7 @@ def plot_bev_anzahl(df_gesamt_anzahl):
 
     if save_plots:
         scenario_name = get_scenario_name()
-        file_name = f"{scenario_name}_bev_anzahl.pdf"
+        file_name = f"{scenario_name}_bev_anzahl.png"
         file_path = os.path.join(folder, file_name)
         plt.savefig(file_path)
 
@@ -192,6 +200,26 @@ def plot_ladezeiten_pro_lkw(gesamt_ladezeiten_pro_lkw_dict, ladesäulentyp):
     if save_plots:
         scenario_name = get_scenario_name()
         file_name = f"{scenario_name}_{ladesäulentyp}_ladezeiten_pro_lkw.pdf"
+        file_path = os.path.join(folder, file_name)
+        plt.savefig(file_path)
+    if show_plots:
+        plt.show()
+
+def plot_ladekurve(ladekurve):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    fig, ax = plt.subplots()
+    plt.grid(zorder=0)
+    plt.step(ladekurve.index, ladekurve.values, label='Stufenfunktion', where='post')
+    plt.ylabel(f"relative Ladeleistung")
+    plt.xlabel('State of Charge (SoC) [%]')
+
+
+
+
+    if save_plots:
+        scenario_name = get_scenario_name()
+        file_name = f"ladekurve.png"
         file_path = os.path.join(folder, file_name)
         plt.savefig(file_path)
     if show_plots:

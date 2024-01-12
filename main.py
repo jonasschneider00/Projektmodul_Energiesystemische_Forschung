@@ -3,14 +3,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from approximation import *
-from plots import plot_energiemenge, plot_lastgang, plot_nicht_ladende_LKWs, plot_verkehr, plot_bev_anzahl, plot_energien_pro_lkw, plot_ladezeiten_pro_lkw
+from plots import plot_energiemenge, plot_lastgang, plot_nicht_ladende_LKWs, plot_verkehr, plot_bev_anzahl, plot_energien_pro_lkw, plot_ladezeiten_pro_lkw, plot_ladekurve
 from config import *
 
 working_directory = os.getcwd()
 file_path = os.path.join(working_directory, 'Ladekurven.xlsx')
 df_ladekurven = pd.read_excel(file_path)
 def get_scenario_name():
-    scenario_name = f"{start_date}_{end_date}_{anzahl_simulationen}_{int(anteil_bev * 100)}_{int(tankwahrscheinlichkeit * 100)}_{netzanschlussleistung}"
+    scenario_name = f"{start_date}_{end_date}_{anzahl_simulationen}_{int(anteil_bev * 100)}_{int(tankwahrscheinlichkeit * 100)}_{anzahl_ladesäulen_typ}_{verteilung_kapazitäten}_{netzanschlussleistung}"
     return scenario_name
 
 
@@ -468,14 +468,17 @@ if __name__ == '__main__':
         gesamt_df_ladeleistung, gesamt_df_nicht_ladende_lkws, ladequoten, energien_dict, df_lkws_dict, df_ladeleistung_dict, \
             gesamt_nicht_geladen_an_ladesöule_dict, gesamt_geladen_an_ladesöule_dict, \
             gesamt_energiemengen_pro_lkw_dict, gesamt_ladezeiten_pro_lkw_dict = load_output_data_from_pickle('OUTPUT')
+        durchschnittliche_ladequote = np.mean(list(ladequoten.values()))
+        print(f"durchschnittliche Ladequote: {durchschnittliche_ladequote}")
         plot_lastgang(gesamt_df_ladeleistung)
-        plot_nicht_ladende_LKWs(gesamt_df_nicht_ladende_lkws)
+        #plot_nicht_ladende_LKWs(gesamt_df_nicht_ladende_lkws)
         plot_energiemenge(energien_dict)
-        plot_verkehr(verkehrsdaten)
-        plot_bev_anzahl(df_gesamt_anzahl)
-        for ladesäulentyp in ladesäulentypen:
-            plot_energien_pro_lkw(gesamt_energiemengen_pro_lkw_dict, ladesäulentyp=ladesäulentyp)
-            plot_ladezeiten_pro_lkw(gesamt_ladezeiten_pro_lkw_dict, ladesäulentyp=ladesäulentyp)
+        #plot_verkehr(verkehrsdaten)
+        #plot_bev_anzahl(df_gesamt_anzahl)
+        # for ladesäulentyp in ladesäulentypen:
+        #     plot_energien_pro_lkw(gesamt_energiemengen_pro_lkw_dict, ladesäulentyp=ladesäulentyp)
+        #     plot_ladezeiten_pro_lkw(gesamt_ladezeiten_pro_lkw_dict, ladesäulentyp=ladesäulentyp)
+        plot_ladekurve(ladekurve=df_ladekurven[504])
 
 
 
